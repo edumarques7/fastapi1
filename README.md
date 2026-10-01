@@ -354,7 +354,7 @@ Estes pontos descrevem o código atual; a documentação não altera as regras d
 
 A coleção foi executada com **Newman**, usando **Python 3.10.21**, **PostgreSQL 15.12**, as versões do `requirements.txt` e `bcrypt==3.2.2`: **16 requisições e 25 verificações aprovadas**.
 
-A validação usou um banco local descartável, sem acessar a URL remota do código. Também foi aprovado um teste de regressão que inicializa um banco vazio e repete a criação de tabelas após inserir usuário e artigo, verificando a preservação dos registros. `docker compose config --quiet` passou. O Docker daemon estava indisponível, portanto a construção da imagem e a execução dos containers não foram verificadas. A interface gráfica do Postman, os comandos de Windows/macOS e o deploy externo não foram executados. Os testes cobrem o fluxo funcional descrito, não uma auditoria completa de segurança.
+A validação usou um banco local descartável, sem acessar a URL remota do código. Também foi aprovado um teste de regressão que inicializa um banco vazio e repete a criação de tabelas após inserir usuário e artigo, verificando a preservação dos registros. `docker compose config --quiet` passou. A construção da imagem e a inicialização pelo Docker Compose também foram validadas, com ambos os serviços saudáveis e `pip check` sem conflitos. Dentro dos containers, as 16 requisições e 25 verificações do Postman passaram. Usuário, artigo e token permaneceram válidos após reiniciar a API e após executar `docker compose down` seguido de `up`, preservando o volume. A interface gráfica do Postman, os comandos de Windows/macOS e o deploy externo não foram executados. Os testes cobrem o fluxo funcional descrito, não uma auditoria completa de segurança.
 
 ### Teste de preservação dos dados
 
