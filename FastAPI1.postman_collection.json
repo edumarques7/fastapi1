@@ -1,0 +1,549 @@
+{
+  "info": {
+    "name": "FastAPI1 — Usuários e artigos",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Execute em banco local de testes, na ordem original. Cria usuário com e-mail exclusivo e artigo, valida autenticação e remove os dados criados. Não envia e-mails. As rotas de atualização/exclusão de usuários são públicas no código atual. Não é uma auditoria de segurança."
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "senha",
+      "value": "SenhaLocalPostman123!",
+      "type": "string"
+    },
+    {
+      "key": "email",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Fluxo completo local",
+      "item": [
+        {
+          "name": "01 - Cadastrar usuário",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/usuarios/signup",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Teste\",\n  \"sobrenome\": \"Postman\",\n  \"email\": \"{{email}}\",\n  \"senha\": \"{{senha}}\",\n  \"eh_admin\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"email\", \"postman-\" + pm.variables.replaceIn(\"{{$guid}}\") + \"@example.com\");",
+                  "[\"usuario_id\", \"artigo_id\", \"access_token\"].forEach(k => pm.collectionVariables.unset(k));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Usuário sem senha na resposta\", () => { const j=pm.response.json(); pm.expect(j.id).to.be.a(\"number\"); pm.expect(j).not.to.have.property(\"senha\"); pm.expect(j.email).to.equal(pm.collectionVariables.get(\"email\")); pm.collectionVariables.set(\"usuario_id\",j.id); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 - Recusar e-mail duplicado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/usuarios/signup",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Teste\",\n  \"sobrenome\": \"Postman\",\n  \"email\": \"{{email}}\",\n  \"senha\": \"{{senha}}\",\n  \"eh_admin\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 406\", () => pm.response.to.have.status(406));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 - Recusar login incorreto",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/usuarios/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{email}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "incorreta",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 - Login",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/usuarios/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{email}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{senha}}",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Token bearer recebido\", () => { const j=pm.response.json(); pm.expect(j.token_type).to.equal(\"bearer\"); pm.expect(j.access_token).to.be.a(\"string\").and.not.empty; pm.collectionVariables.set(\"access_token\",j.access_token); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 - Consultar usuário logado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/usuarios/logado",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Identidade autenticada\", () => pm.expect(pm.response.json().id).to.equal(Number(pm.collectionVariables.get(\"usuario_id\"))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 - Recusar artigo sem token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/artigos/",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Artigo de teste\",\n  \"descricao\": \"Criado pela coleção Postman\",\n  \"url_fonte\": \"https://example.com/artigo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 - Criar artigo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/artigos/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Artigo de teste\",\n  \"descricao\": \"Criado pela coleção Postman\",\n  \"url_fonte\": \"https://example.com/artigo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Artigo pertence ao usuário\", () => { const j=pm.response.json(); pm.expect(j.usuario_id).to.equal(Number(pm.collectionVariables.get(\"usuario_id\"))); pm.expect(j.id).to.be.a(\"number\"); pm.collectionVariables.set(\"artigo_id\",j.id); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 - Listar artigos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/artigos/",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Lista contém o artigo criado\", () => pm.expect(pm.response.json().map(a => a.id)).to.include(Number(pm.collectionVariables.get(\"artigo_id\"))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09 - Consultar artigo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/artigos/{{artigo_id}}",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Título correto\", () => pm.expect(pm.response.json().titulo).to.equal(\"Artigo de teste\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 - Atualizar artigo próprio",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/artigos/{{artigo_id}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Artigo atualizado\",\n  \"descricao\": \"Criado pela coleção Postman\",\n  \"url_fonte\": \"https://example.com/artigo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 202\", () => pm.response.to.have.status(202));",
+                  "pm.test(\"Atualização aplicada\", () => pm.expect(pm.response.json().titulo).to.equal(\"Artigo atualizado\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 - Consultar usuário e artigos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/usuarios/{{usuario_id}}",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Relacionamento usuário e artigo\", () => pm.expect(pm.response.json().artigos.map(a => a.id)).to.include(Number(pm.collectionVariables.get(\"artigo_id\"))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 - Atualizar usuário de teste",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/usuarios/{{usuario_id}}",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Atualizado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Nome atualizado\", () => pm.expect(pm.response.json().nome).to.equal(\"Atualizado\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13 - Excluir artigo de teste",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/artigos/{{artigo_id}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14 - Confirmar exclusão do artigo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/artigos/{{artigo_id}}",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15 - Excluir usuário de teste",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/usuarios/{{usuario_id}}",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "16 - Confirmar exclusão do usuário",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/usuarios/{{usuario_id}}",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
