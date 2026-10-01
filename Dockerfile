@@ -1,15 +1,12 @@
-FROM python:3.10.12-slim-buster
+FROM python:3.10-slim-bookworm
 
-ENV PYTHONUNBUFFERED 1
-ENV PATH="/root/.local/bin:$PATH"
-ENV PYTHONPATH='/'
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
-COPY ./requirements.txt /
-
-RUN apt-get update -y \
-&& pip install -r requirements.txt
-
-COPY . /app
 WORKDIR /app
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--reload"]
+EXPOSE 8000
+CMD ["sh", "-c", "python criar_tabelas.py && exec uvicorn main:app --host 0.0.0.0 --port 8000"]

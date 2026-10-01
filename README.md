@@ -2,7 +2,7 @@
 
 API REST de estudo construída com **FastAPI**, **PostgreSQL** e **SQLAlchemy assíncrono**. Permite cadastrar usuários, autenticar com JWT e publicar artigos vinculados a um autor.
 
-**[Começar](#-como-rodar-localmente)** · **[Testar com Postman](#-testando-com-postman)** · **[Rotas](#-rotas-da-api)** · **[Limitações](#-limitações-e-cuidados)**
+**[Começar com Docker](#-rodar-com-docker)** · **[Testar com Postman](#-testando-com-postman)** · **[Rotas](#-rotas-da-api)** · **[Limitações](#-limitações-e-cuidados)**
 
 ## ✨ O que o projeto faz
 
@@ -29,7 +29,59 @@ API REST de estudo construída com **FastAPI**, **PostgreSQL** e **SQLAlchemy as
 | python-jose | 3.3.0 | Assinatura e validação JWT |
 | Passlib | 1.7.4 | Hash e verificação de senhas |
 
-O guia complementa a instalação com `bcrypt==3.2.2`, ausente do `requirements.txt` e validado com esta versão do Passlib. Para reproduzir o ambiente, mantenha as versões fixadas; não atualize isoladamente para Pydantic 2 ou SQLAlchemy 2.
+`bcrypt==3.2.2` está incluído no `requirements.txt` e foi validado com esta versão do Passlib. Para reproduzir o ambiente, mantenha as versões fixadas; não atualize isoladamente para Pydantic 2 ou SQLAlchemy 2.
+
+## 🐳 Rodar com Docker
+
+Com **Docker e Docker Compose v2 instalados e em execução**, clone o projeto e suba os serviços:
+
+```bash
+git clone https://github.com/edumarques7/fastapi1.git
+cd fastapi1
+docker compose up --build
+```
+
+Se já clonou o repositório, entre na pasta, execute `git pull` e depois `docker compose up --build`.
+
+**Não é necessário instalar Python ou PostgreSQL na máquina, criar `.env` ou executar o script de tabelas manualmente.** O Compose:
+
+1. Inicia o PostgreSQL e aguarda o healthcheck confirmar que ele aceita conexões.
+2. Executa `criar_tabelas.py`, que cria somente as tabelas ausentes.
+3. Inicia a API na porta 8000 e verifica uma rota que consulta o banco.
+
+Abra **http://127.0.0.1:8000/docs** para o Swagger ou importe a coleção Postman abaixo.
+
+```bash
+# Executar em segundo plano
+docker compose up --build -d
+
+# Verificar o estado e acompanhar os logs
+docker compose ps
+docker compose logs -f app
+
+# Parar e remover containers, mantendo os dados
+docker compose down
+
+# Subir novamente com os dados existentes
+docker compose up -d
+```
+
+Os dados ficam no volume nomeado `postgres_data`, gerenciado pelo Compose. Reiniciar a API ou executar novamente o script de tabelas preserva usuários e artigos. **`docker compose down -v` apaga esse volume e os dados; não use essa opção para uma parada normal.**
+
+A configuração é para desenvolvimento local: a API é publicada somente em `127.0.0.1`, o banco não expõe porta para a máquina e as credenciais padrão são apenas de desenvolvimento. Os antigos serviços auxiliares de pgAdmin e banco de teste não fazem parte da inicialização padrão.
+
+Opcionalmente, crie um `.env` na raiz para alterar a porta ou o segredo JWT usados pelo Compose:
+
+```dotenv
+APP_PORT=8001
+JWT_SECRET=substitua-por-um-segredo-longo-e-aleatorio
+```
+
+O `.env` é ignorado pelo Git e pela construção da imagem. Essa leitura é feita pelo **Compose**, não pela aplicação Python. Com `APP_PORT=8001`, ajuste também a variável `base_url` do Postman. Trocar `JWT_SECRET` invalida tokens anteriores.
+
+O healthcheck e `depends_on: condition: service_healthy` seguem a [documentação de inicialização do Docker Compose](https://docs.docker.com/compose/how-tos/startup-order/). A criação automática não substitui migrações: mudanças em colunas de tabelas existentes precisam de uma migração própria.
+
+> Esta configuração usa um volume novo. Dados dos antigos diretórios `/var/cache/postgres_data` não são migrados nem apagados automaticamente. Se precisar deles, faça backup e restaure no novo banco.
 
 ## 🚀 Como rodar localmente
 
@@ -67,7 +119,6 @@ Instale as dependências:
 
 ```bash
 python -m pip install -r requirements.txt
-python -m pip install bcrypt==3.2.2
 ```
 
 ### 3. Prepare um banco exclusivo para desenvolvimento
@@ -90,7 +141,7 @@ Se a porta 5432 já estiver ocupada, use `127.0.0.1:5433:5432` no mapeamento e `
 
 ### 4. Configure o banco e a chave JWT
 
-**Defina estas variáveis antes de executar qualquer script da aplicação.** O código possui uma URL remota e uma chave JWT fixas como valores padrão; este guia substitui ambos por configurações locais.
+**Defina estas variáveis antes de executar qualquer script da aplicação.** A aplicação exige `DB_URL` e `JWT_SECRET`; os antigos valores remotos fixos foram removidos. No Docker, o Compose já fornece essas variáveis.
 
 **Linux / macOS:**
 
@@ -117,15 +168,15 @@ As variáveis são lidas por `BaseSettings`. O código não configura carregamen
 
 Mantenha o terminal aberto para as próximas etapas. Ao abrir outro terminal, defina as variáveis novamente. Trocar `JWT_SECRET` invalida tokens emitidos com a chave anterior.
 
-### 5. Crie as tabelas — somente no banco de teste
+### 5. Crie as tabelas
 
-> **Atenção: `criar_tabelas.py` apaga as tabelas dos modelos antes de recriá-las. Todos os usuários e artigos dessas tabelas serão perdidos.** Confira se `DB_URL` aponta para o banco local recém-criado. Não execute esse script em um banco com dados que deseja manter.
+Depois de configurar `DB_URL` e `JWT_SECRET`, execute:
 
 ```bash
 python criar_tabelas.py
 ```
 
-O script cria as tabelas `usuarios` e `artigos`; ele não cria o banco PostgreSQL. Não é necessário executá-lo a cada inicialização da API.
+O script cria as tabelas `usuarios` e `artigos` quando ainda não existem e preserva os registros já cadastrados. Ele não cria o banco PostgreSQL nem altera colunas de tabelas existentes. No Docker, essa etapa acontece automaticamente antes de iniciar o servidor.
 
 ### 6. Inicie a API
 
@@ -246,7 +297,7 @@ Preserve a barra final nas rotas de listagem e criação de artigos para evitar 
 ```text
 fastapi1/
 ├── main.py                       # Aplicação FastAPI
-├── criar_tabelas.py               # Apaga e recria as tabelas
+├── criar_tabelas.py               # Cria tabelas ausentes, preservando dados
 ├── requirements.txt              # Dependências fixadas
 ├── FastAPI1.postman_collection.json
 ├── api/v1/
@@ -269,20 +320,6 @@ fastapi1/
 └── app.yaml
 ```
 
-## 🐳 Sobre os arquivos Docker existentes
-
-O caminho principal deste guia executa a API em um ambiente virtual. O comando Docker mostrado acima é uma alternativa apenas para o banco e **não usa o Compose do repositório**.
-
-O Compose existente precisa de ajustes antes de ser usado como fluxo completo:
-
-- A `DB_URL` do serviço `app` aponta para `localhost`; entre containers, o host do banco deve ser `postgresql`, nome do serviço.
-- Os serviços de banco e pgAdmin dependem de um `.env` não fornecido. Eles precisam de variáveis como `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `PGADMIN_DEFAULT_EMAIL` e `PGADMIN_DEFAULT_PASSWORD`.
-- O serviço `app` precisa receber uma `JWT_SECRET` própria e ter `bcrypt` instalado na imagem.
-- O Dockerfile usa a base antiga `python:3.10.12-slim-buster`; sua construção deve ser revisada antes de depender dela.
-- Os volumes usam caminhos absolutos em `/var/cache`, que podem exigir permissões específicas. `depends_on` sozinho não verifica se o banco já aceita conexões.
-
-Os arquivos `Procfile`, `runtime.txt` e `app.yaml` são configurações de implantação existentes, mas este guia não valida deploy em provedores externos.
-
 ## 🛠️ Solução de problemas
 
 | Problema | O que verificar |
@@ -290,8 +327,10 @@ Os arquivos `Procfile`, `runtime.txt` e `app.yaml` são configurações de impla
 | Falha ao instalar `asyncpg`, `greenlet` ou outras dependências antigas | Use Python 3.10 e recrie o ambiente virtual. |
 | `MissingBackendError` ao cadastrar ou autenticar | Instale `bcrypt==3.2.2` no mesmo ambiente da API. |
 | Conexão recusada no PostgreSQL | Confirme se o banco está ativo, a porta e as credenciais da `DB_URL`. |
-| A aplicação tenta acessar o banco remoto | Exporte `DB_URL` antes de iniciar o processo; um `.env` sozinho não é carregado. |
-| `relation ... does not exist` | As tabelas ainda não foram criadas; leia o aviso de perda de dados antes de usar `criar_tabelas.py`. |
+| Erro de configuração sobre `DB_URL` ou `JWT_SECRET` | Na execução sem Docker, exporte ambas antes de iniciar. No Docker, confira `docker compose config`. |
+| `Cannot connect to the Docker daemon` | Abra o Docker Desktop ou inicie o serviço Docker antes de executar o Compose. |
+| Porta 8000 ocupada | Defina `APP_PORT=8001` no `.env` do Compose e ajuste o endereço no navegador/Postman. |
+| `relation ... does not exist` | Execute `python criar_tabelas.py` com as variáveis corretas; no Docker, confira os logs de inicialização. |
 | 422 no login | Use `x-www-form-urlencoded`, com `username` e `password`. |
 | 422 ao criar ou atualizar artigo | Envie `titulo`, `descricao` e uma `url_fonte` válida em JSON. |
 | 400 no login | E-mail ou senha incorretos. |
@@ -304,15 +343,25 @@ Os arquivos `Procfile`, `runtime.txt` e `app.yaml` são configurações de impla
 
 Estes pontos descrevem o código atual; a documentação não altera as regras da aplicação:
 
-- **Segredos publicados:** `core/configs.py` contém credenciais de banco e uma chave JWT. Rotacione esses segredos caso ainda estejam ativos. Usar variáveis locais não remove o conteúdo já publicado no histórico.
+- **Segredos antigos:** as credenciais de banco e a chave JWT fixas foram removidas de `core/configs.py`, mas continuam no histórico do Git. Rotacione-as caso ainda estejam ativas. Os valores padrão do Compose são exclusivamente para desenvolvimento local.
 - **Permissões de usuários:** consulta, atualização e exclusão de usuários são públicas. O cadastro aceita `eh_admin` do cliente, e esse campo não implementa controle de acesso nas rotas.
 - **Autoria dos artigos:** o PUT exige login, mas não restringe a edição ao autor. Ao editar um artigo de outro usuário, o código transfere a autoria para quem fez a requisição. O DELETE, por sua vez, filtra pelo autor autenticado.
 - **Atualização de usuários:** o código aplica apenas valores considerados verdadeiros; por exemplo, enviar `eh_admin=false` não remove esse atributo de quem já o possui.
-- **Banco:** não há migrações versionadas, e o script fornecido recria as tabelas de forma destrutiva. A exclusão de usuário também exclui seus artigos por cascade.
+- **Banco:** não há migrações versionadas. A inicialização cria tabelas ausentes, mas não atualiza a estrutura das existentes. A exclusão de usuário também exclui seus artigos por cascade.
 - **Manutenção:** as dependências são antigas e precisam de revisão antes de uma exposição pública. O modo de desenvolvimento e os arquivos de deploy não representam uma configuração pronta para produção.
 
 ## ✅ Validação deste guia
 
 A coleção foi executada com **Newman**, usando **Python 3.10.21**, **PostgreSQL 15.12**, as versões do `requirements.txt` e `bcrypt==3.2.2`: **16 requisições e 25 verificações aprovadas**.
 
-A validação usou um banco local descartável, sem acessar a URL remota do código. A interface gráfica do Postman, os comandos de Windows/macOS, o fluxo Docker e o deploy externo não foram executados. Os testes cobrem o fluxo funcional descrito, não uma auditoria completa de segurança.
+A validação usou um banco local descartável, sem acessar a URL remota do código. Também foi aprovado um teste de regressão que inicializa um banco vazio e repete a criação de tabelas após inserir usuário e artigo, verificando a preservação dos registros. `docker compose config --quiet` passou. O Docker daemon estava indisponível, portanto a construção da imagem e a execução dos containers não foram verificadas. A interface gráfica do Postman, os comandos de Windows/macOS e o deploy externo não foram executados. Os testes cobrem o fluxo funcional descrito, não uma auditoria completa de segurança.
+
+### Teste de preservação dos dados
+
+Em um banco PostgreSQL exclusivo para testes, configure `TEST_DATABASE_URL` com uma URL `postgresql+asyncpg://...` e execute:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+O teste cria as tabelas ausentes e registros temporários, repete a inicialização e verifica se os dados continuam presentes. Ao terminar, remove somente seus registros. Sem `TEST_DATABASE_URL`, ele é ignorado.
